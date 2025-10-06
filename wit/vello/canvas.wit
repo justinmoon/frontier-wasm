@@ -1,0 +1,85 @@
+package vello:canvas@0.1.0;
+
+/// Shared math helpers
+interface math {
+    record vec2 { x: f32, y: f32 }
+    record color { r: f32, g: f32, b: f32, a: f32 }
+}
+
+/// Host capabilities the guest can call.
+interface host {
+    use math.{color, vec2};
+
+    enum log-level { trace, debug, info, warn, error }
+
+    /// Clear the current scene background (call once per frame before drawing).
+    clear: func(c: color);
+
+    /// Fill axis-aligned rectangle specified by top-left + size (logical pixels).
+    fill-rect: func(origin: vec2, size: vec2, color: color);
+
+    /// Draw text anchored at baseline origin using a bundled font.
+    draw-text: func(text: string, origin: vec2, size: f32, color: color);
+
+    /// Request another animation frame; host coalesces multiple calls.
+    request-frame: func();
+
+    /// Debug logging surfaced via host console.
+    log: func(level: log-level, message: string);
+}
+
+/// Events/lifecycle callbacks the guest exports.
+interface app {
+    use math.{vec2};
+
+    record logical-size { width: f32, height: f32, scale-factor: f32 }
+
+    record pointer-button { primary: bool, secondary: bool }
+
+    record modifiers {
+        shift: bool,
+        ctrl: bool,
+        alt: bool,
+        meta: bool,
+    }
+
+    enum pointer-kind { mouse, touch, pen }
+
+    record pointer-event {
+        kind: pointer-kind,
+        position: vec2,
+        buttons: pointer-button,
+        modifiers: modifiers,
+        pointer-id: u64,
+    }
+
+    record key-event {
+        key: string,
+        code: string,
+        modifiers: modifiers,
+        is-repeat: bool,
+    }
+
+    /// Called once after component instantiation.
+    init: func(initial: logical-size);
+
+    /// Called when window logical size or scale factor changes.
+    resize: func(new: logical-size);
+
+    /// Pointer events targeting the canvas.
+    pointer-down: func(evt: pointer-event);
+    pointer-up: func(evt: pointer-event);
+    pointer-move: func(evt: pointer-event);
+
+    /// Keyboard focus is owned by the host; key events delivered when focused.
+    key-down: func(evt: key-event);
+    key-up: func(evt: key-event);
+
+    /// Frame callback. Host only invokes when guest requested redraw.
+    frame: func(dt-ms: f32);
+}
+
+world canvas-app {
+    import host;
+    export app;
+}

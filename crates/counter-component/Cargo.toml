@@ -1,0 +1,21 @@
+[package]
+name = "counter-component"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow.workspace = true
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen.workspace = true
+
+[package.metadata.component]
+package = "frontier:counter"
+
+[package.metadata.component.target]
+path = "../../wit/vello"
+world = "canvas-app"

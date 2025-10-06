@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "crates/frontier-wasm-host",
+    "crates/counter-component",
+]
+resolver = "2"
+
+default-members = ["crates/frontier-wasm-host"]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0 OR MIT"
+authors = ["Frontier"]
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+wit-bindgen = "0.46.0"
+
+[workspace.metadata]
+description = "Frontier Wasm canvas rail prototype"

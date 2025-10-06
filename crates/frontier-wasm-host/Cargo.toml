@@ -1,0 +1,22 @@
+[package]
+name = "frontier-wasm-host"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+clap = { version = "4.5", features = ["derive"] }
+winit = "0.30"
+wgpu = { version = "26.0", features = ["wgsl"] }
+vello = { version = "0.6.0", features = ["wgpu"] }
+pollster = "0.3"
+wasmtime = { version = "27.0", features = ["component-model"] }
+wasmtime-wasi = "27.0"
+skrifa = { version = "0.37", features = ["std"] }
+ab_glyph = "0.2"
+wit-bindgen.workspace = true

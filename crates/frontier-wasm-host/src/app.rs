@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -15,10 +15,10 @@ use crate::graphics::{GraphicsState, OverlayContent};
 use crate::model::{
     KeyEvent as GuestKeyEvent, LogicalSize, Modifiers, PointerButtons, PointerEvent, PointerKind,
 };
-use crate::runtime::{CallResult, ComponentRuntime, FrameResult};
+use crate::runtime::{CallResult, ComponentRuntime, ComponentSource, FrameResult};
 
 pub struct App {
-    component_path: PathBuf,
+    component: ComponentSource,
     window: Option<Arc<Window>>,
     runtime: Option<ComponentRuntime>,
     graphics: Option<GraphicsState>,
@@ -50,9 +50,9 @@ impl OverlayState {
 }
 
 impl App {
-    pub fn new(component_path: PathBuf) -> Self {
+    pub fn new(component: ComponentSource) -> Self {
         Self {
-            component_path,
+            component,
             window: None,
             runtime: None,
             graphics: None,
@@ -77,7 +77,7 @@ impl App {
         if self.runtime.is_some() {
             return Ok(());
         }
-        let runtime = ComponentRuntime::new(self.component_path.clone())?;
+        let runtime = ComponentRuntime::new(self.component.clone())?;
         self.runtime = Some(runtime);
         Ok(())
     }
@@ -119,7 +119,7 @@ impl App {
 
     fn schedule_restart(&mut self) {
         if self.runtime.is_none() {
-            match ComponentRuntime::new(self.component_path.clone()) {
+            match ComponentRuntime::new(self.component.clone()) {
                 Ok(runtime) => self.runtime = Some(runtime),
                 Err(err) => {
                     self.set_overlay_error("Failed to restart component", &err);
@@ -144,16 +144,42 @@ impl App {
 
     fn set_overlay_error(&mut self, title: &str, err: &anyhow::Error) {
         error!(error = %err, "guest runtime error");
+
+        let root = err.root_cause();
+        let mut body = String::new();
+        let _ = writeln!(&mut body, "Reason: {}", root.to_string().trim());
+
+        let logs = self
+            .runtime
+            .as_ref()
+            .map(|runtime| runtime.recent_logs())
+            .unwrap_or_default();
+        if !logs.is_empty() {
+            body.push('\n');
+            body.push_str("Recent guest logs:\n");
+            for log in logs {
+                let _ = writeln!(&mut body, "  {}", log.trim());
+            }
+        }
+
+        body.push('\n');
+        body.push_str("Error context:\n");
+        for line in format!("{err:#}").lines() {
+            let _ = writeln!(&mut body, "  {}", line);
+        }
+
+        let body = body.trim_end().to_string();
+
         self.overlay = Some(OverlayState {
             title: title.to_string(),
-            body: format!("{err:#}"),
-            footer: "Press R to restart the component".to_string(),
+            body,
+            footer: "Press R to restart the component or close the window to exit.".to_string(),
         });
         self.request_redraw();
     }
 
     fn logical_from_physical(&self, size: PhysicalSize<u32>) -> LogicalSize {
-        let scale = self.scale_factor.max(0.0001) as f32;
+        let scale = self.scale_factor.max(0.0001);
         LogicalSize {
             width: size.width as f32 / scale,
             height: size.height as f32 / scale,
@@ -173,32 +199,45 @@ impl App {
     }
 
     fn key_event_from_winit(&self, event: &KeyEvent) -> GuestKeyEvent {
-        let key = match &event.logical_key {
+        Self::translate_key_event(
+            &event.logical_key,
+            &event.physical_key,
+            event.repeat,
+            self.modifiers,
+        )
+    }
+
+    fn translate_key_event(
+        logical_key: &Key,
+        physical_key: &PhysicalKey,
+        repeat: bool,
+        modifiers: Modifiers,
+    ) -> GuestKeyEvent {
+        let key = match logical_key {
             Key::Character(ch) => ch.to_string(),
             Key::Named(named) => format!("{named:?}"),
             Key::Dead(dead) => format!("Dead({dead:?})"),
             other => format!("{other:?}"),
         };
-        let code = match &event.physical_key {
+        let code = match physical_key {
             PhysicalKey::Code(code) => format!("{code:?}"),
             PhysicalKey::Unidentified(id) => format!("Unidentified({id:?})"),
         };
         GuestKeyEvent {
             key,
             code,
-            modifiers: self.modifiers,
-            is_repeat: event.repeat,
+            modifiers,
+            is_repeat: repeat,
         }
     }
 
     fn tick_frame_time(&mut self) -> f32 {
         let now = Instant::now();
-        let dt = if let Some(last) = self.last_frame_instant.replace(now) {
+        if let Some(last) = self.last_frame_instant.replace(now) {
             (now - last).as_secs_f32() * 1000.0
         } else {
             0.0
-        };
-        dt
+        }
     }
 }
 
@@ -398,5 +437,48 @@ impl ApplicationHandler for App {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::App;
+    use crate::model::Modifiers;
+    use winit::keyboard::{Key, KeyCode, NamedKey, NativeKeyCode, PhysicalKey};
+
+    #[test]
+    fn translates_character_keys_with_modifiers() {
+        let modifiers = Modifiers {
+            shift: true,
+            ctrl: false,
+            alt: false,
+            meta: true,
+        };
+        let event = App::translate_key_event(
+            &Key::Character("X".into()),
+            &PhysicalKey::Code(KeyCode::KeyX),
+            false,
+            modifiers,
+        );
+        assert_eq!(event.key, "X");
+        assert_eq!(event.code, "KeyX");
+        assert!(event.modifiers.shift);
+        assert!(event.modifiers.meta);
+        assert!(!event.modifiers.ctrl);
+        assert!(!event.is_repeat);
+    }
+
+    #[test]
+    fn translates_named_keys_with_unidentified_codes() {
+        let modifiers = Modifiers::default();
+        let event = App::translate_key_event(
+            &Key::Named(NamedKey::ArrowUp),
+            &PhysicalKey::Unidentified(NativeKeyCode::MacOS(0x7E)),
+            true,
+            modifiers,
+        );
+        assert_eq!(event.key, "ArrowUp");
+        assert_eq!(event.code, "Unidentified(MacOS(0x007E))");
+        assert!(event.is_repeat);
     }
 }

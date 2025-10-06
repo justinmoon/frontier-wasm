@@ -196,7 +196,7 @@ impl GraphicsState {
                 size,
                 color,
             } => {
-                self.draw_text(&text, [origin.x, origin.y], *size, *color);
+                self.draw_text(text.as_str(), [origin.x, origin.y], *size, *color);
             }
         }
     }

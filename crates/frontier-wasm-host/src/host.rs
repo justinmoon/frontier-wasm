@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fmt;
 
 use crate::component::vello::canvas::host::{Host as GuestHost, LogLevel};
@@ -59,19 +60,14 @@ pub struct FrameOutput {
     pub commands: Vec<DrawCommand>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Phase {
+    #[default]
     Idle,
     Init,
     Resize,
     Event,
     Frame,
-}
-
-impl Default for Phase {
-    fn default() -> Self {
-        Phase::Idle
-    }
 }
 
 impl Phase {
@@ -84,11 +80,14 @@ impl Phase {
     }
 }
 
+const RECENT_LOG_LIMIT: usize = 16;
+
 #[derive(Default, Debug)]
 pub struct HostCtx {
     phase: Phase,
     frame: FrameOutput,
     redraw_requested: bool,
+    recent_logs: VecDeque<String>,
 }
 
 impl HostCtx {
@@ -120,6 +119,25 @@ impl HostCtx {
         let requested = self.redraw_requested;
         self.redraw_requested = false;
         requested
+    }
+
+    pub fn recent_logs_snapshot(&self) -> Vec<String> {
+        self.recent_logs.iter().cloned().collect()
+    }
+
+    fn record_guest_log(&mut self, level: LogLevel, message: &str) {
+        if self.recent_logs.len() == RECENT_LOG_LIMIT {
+            self.recent_logs.pop_front();
+        }
+        let level_label = match level {
+            LogLevel::Trace => "TRACE",
+            LogLevel::Debug => "DEBUG",
+            LogLevel::Info => "INFO",
+            LogLevel::Warn => "WARN",
+            LogLevel::Error => "ERROR",
+        };
+        self.recent_logs
+            .push_back(format!("[{level_label}] {message}"));
     }
 
     fn push_command(&mut self, cmd: DrawCommand) {
@@ -174,6 +192,7 @@ impl GuestHost for HostCtx {
     }
 
     fn log(&mut self, level: LogLevel, message: String) {
+        self.record_guest_log(level, &message);
         match level {
             LogLevel::Trace => tracing::trace!(target: "guest", "{message}"),
             LogLevel::Debug => tracing::debug!(target: "guest", "{message}"),

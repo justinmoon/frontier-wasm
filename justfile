@@ -1,12 +1,13 @@
-component-release:
-    cargo component build -p counter-component --release
+component profile="debug":
+    if [ {{profile}} = "release" ]; then \
+        cargo component build -p counter-component --release; \
+    else \
+        cargo component build -p counter-component; \
+    fi
 
-run HOST_ARGS="":
-    just component-release
-    cargo run -p frontier-wasm-host -- --component target/wasm32-wasip1/release/counter-component.wasm {{HOST_ARGS}}
-
-wasm-dev:
-    cargo component build -p counter-component
+run profile="debug" HOST_ARGS="":
+    just component {{profile}}
+    cargo run -p frontier-wasm-host -- --component target/wasm32-wasip1/{{profile}}/counter_component.wasm {{HOST_ARGS}}
 
 check:
     cargo fmt --all

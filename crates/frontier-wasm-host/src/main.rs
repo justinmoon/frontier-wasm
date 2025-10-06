@@ -1,10 +1,3 @@
-mod app;
-mod component;
-mod graphics;
-mod host;
-mod model;
-mod runtime;
-
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -12,7 +5,7 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 use winit::event_loop::EventLoop;
 
-use app::App;
+use frontier_wasm_host::app::App;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Frontier WASM canvas prototype host")]

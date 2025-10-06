@@ -1,11 +1,11 @@
 # frontier-wasm
 
-A prototype browser-style app framework: desktop host code loads WebAssembly components with Wasmtime and renders them through Vello.
+This prototype shows a desktop "browser" host that loads WebAssembly components with Wasmtime and renders them through Vello. It ships with a release-built counter guest so the demo works out of the box.
 
-## Usage
+## Quick Start
 
-- Enter the Nix environment with `direnv allow` (recommended) or `nix develop`.
-- Run the interactive counter demo with `just demo`.
-- Run the full CI check suite with `just ci`.
+1. Launch the Nix development shell (`direnv allow` or `nix develop`). It provides Rust, `cargo-component`, Wasmtime, and all build tools.
+2. Run the interactive counter window with `just run` (append `release` for a release build). The host will fall back to the embedded counter if no component path is provided.
+3. Execute the full check suite with `just ci` before sending changes; it mirrors the GitHub Actions pipeline.
 
-The demo ships with an embedded counter component, so you can launch it without pre-building artifacts. Use `just dist` if you need a shareable bundle.
+Extra helpers: `just dist` assembles a distributable bundle under `dist/`, and `just ensure-cargo-component` exits early if you forget to run inside the Nix shell.

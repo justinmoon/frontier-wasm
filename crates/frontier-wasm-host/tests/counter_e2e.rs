@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use frontier_wasm_host::{ComponentRuntime, LogicalSize};
+use frontier_wasm_host::{ComponentRuntime, ComponentSource, LogicalSize};
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -12,11 +12,24 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn has_cargo_component() -> bool {
+    Command::new("cargo")
+        .args(["component", "--version"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
 fn counter_component_artifact() -> PathBuf {
     workspace_root().join("target/wasm32-wasip1/debug/counter_component.wasm")
 }
 
-fn build_counter_component() {
+fn build_counter_component() -> bool {
+    if !has_cargo_component() {
+        eprintln!("skipping counter_component_lifecycle: cargo-component unavailable");
+        return false;
+    }
+
     let status = Command::new("cargo")
         .current_dir(workspace_root())
         .args(["component", "build", "-p", "counter-component"])
@@ -27,14 +40,18 @@ fn build_counter_component() {
         counter_component_artifact().exists(),
         "component artifact missing after build"
     );
+    true
 }
 
 #[test]
 fn counter_component_lifecycle() {
-    build_counter_component();
+    if !build_counter_component() {
+        return;
+    }
 
     let component_path = counter_component_artifact();
-    let mut runtime = ComponentRuntime::new(component_path).expect("instantiate runtime");
+    let source = ComponentSource::from_path(component_path);
+    let mut runtime = ComponentRuntime::new(source).expect("instantiate runtime");
 
     let init = runtime
         .call_init(LogicalSize {
@@ -47,7 +64,7 @@ fn counter_component_lifecycle() {
 
     let frame = runtime.call_frame(16.0).expect("call frame");
     assert!(
-        frame.frame.commands.len() > 0,
+        !frame.frame.commands.is_empty(),
         "frame should contain drawing commands"
     );
 }

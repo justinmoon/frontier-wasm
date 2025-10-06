@@ -1,42 +1,11 @@
 # frontier-wasm
 
-Prototype host and guest for the Vello canvas rail.
+This prototype shows a desktop "browser" host that loads WebAssembly components with Wasmtime and renders them through Vello. It ships with a release-built counter guest so the demo works out of the box.
 
-## Prerequisites
+## Quick Start
 
-- Rust toolchain (2021 edition or newer).
-- [`cargo-component`](https://github.com/bytecodealliance/cargo-component):
-  ```sh
-  cargo install cargo-component
-  ```
+1. Launch the Nix development shell (`direnv allow` or `nix develop`). It provides Rust, `cargo-component`, Wasmtime, and all build tools.
+2. Run the interactive counter window with `just run` (append `release` for a release build). The host will fall back to the embedded counter if no component path is provided.
+3. Execute the full check suite with `just ci` before sending changes; it mirrors the GitHub Actions pipeline.
 
-## Building the counter component
-
-Compile the guest component to a Wasm binary using the component model:
-
-```sh
-cargo component build -p counter-component
-```
-
-The artifact will be written to
-`target/wasm32-wasip1/debug/counter_component.wasm` (use
-`--release` to produce the release build under `.../release/`).
-
-## Running the host
-
-Launch the desktop host and point it at the component artifact:
-
-```sh
-cargo run -p frontier-wasm-host -- \
-  --component target/wasm32-wasip1/debug/counter_component.wasm
-```
-
-Alternatively, use the `just run` helper:
-
-```sh
-just run                # builds debug component and starts the host
-just run release        # builds release component and starts the host
-```
-
-The host opens a window rendering the counter component, translating
-pointer and keyboard input through the Vello canvas bindings.
+Extra helpers: `just dist` assembles a distributable bundle under `dist/`, and `just ensure-cargo-component` exits early if you forget to run inside the Nix shell.

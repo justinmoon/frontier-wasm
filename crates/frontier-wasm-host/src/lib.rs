@@ -6,4 +6,4 @@ pub mod model;
 pub mod runtime;
 
 pub use model::LogicalSize;
-pub use runtime::ComponentRuntime;
+pub use runtime::{ComponentRuntime, ComponentSource};

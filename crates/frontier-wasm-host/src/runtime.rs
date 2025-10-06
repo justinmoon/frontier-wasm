@@ -1,4 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use wasmtime::component::{Component, Linker, ResourceTable};
@@ -37,8 +38,30 @@ impl WasiView for StoreState {
     }
 }
 
+#[derive(Clone)]
+pub enum ComponentSource {
+    Path(PathBuf),
+    Embedded {
+        bytes: Arc<[u8]>,
+        label: &'static str,
+    },
+}
+
+impl ComponentSource {
+    pub fn from_path<P: Into<PathBuf>>(path: P) -> Self {
+        Self::Path(path.into())
+    }
+
+    pub fn embedded(label: &'static str, bytes: &'static [u8]) -> Self {
+        Self::Embedded {
+            bytes: Arc::from(bytes),
+            label,
+        }
+    }
+}
+
 pub struct ComponentRuntime {
-    component_path: PathBuf,
+    source: ComponentSource,
     engine: Engine,
     component: Component,
     store: Store<StoreState>,
@@ -57,13 +80,13 @@ pub struct FrameResult {
 }
 
 impl ComponentRuntime {
-    pub fn new(component_path: PathBuf) -> Result<Self> {
+    pub fn new(source: ComponentSource) -> Result<Self> {
         let engine = Self::build_engine()?;
-        let component = Self::load_component(&engine, &component_path)?;
+        let component = Self::load_component(&engine, &source)?;
         let (store, bindings) = Self::instantiate(&engine, &component)?;
 
         Ok(Self {
-            component_path,
+            source,
             engine,
             component,
             store,
@@ -72,7 +95,7 @@ impl ComponentRuntime {
     }
 
     pub fn reload(&mut self) -> Result<()> {
-        self.component = Self::load_component(&self.engine, &self.component_path)?;
+        self.component = Self::load_component(&self.engine, &self.source)?;
         let (store, bindings) = Self::instantiate(&self.engine, &self.component)?;
         self.store = store;
         self.bindings = bindings;
@@ -161,6 +184,10 @@ impl ComponentRuntime {
         })
     }
 
+    pub fn recent_logs(&self) -> Vec<String> {
+        self.store.data().host.recent_logs_snapshot()
+    }
+
     fn invoke<F>(&mut self, phase: Phase, f: F) -> Result<CallResult>
     where
         F: FnOnce(&component::CanvasApp, &mut Store<StoreState>) -> wasmtime::Result<()>,
@@ -193,9 +220,15 @@ impl ComponentRuntime {
         Engine::new(&config).context("failed to initialise Wasmtime engine")
     }
 
-    fn load_component(engine: &Engine, path: &Path) -> Result<Component> {
-        Component::from_file(engine, path)
-            .with_context(|| format!("failed to load component from {}", path.display()))
+    fn load_component(engine: &Engine, source: &ComponentSource) -> Result<Component> {
+        match source {
+            ComponentSource::Path(path) => Component::from_file(engine, path)
+                .with_context(|| format!("failed to load component from {}", path.display())),
+            ComponentSource::Embedded { bytes, label } => {
+                Component::from_binary(engine, bytes.as_ref())
+                    .with_context(|| format!("failed to load {label} component"))
+            }
+        }
     }
 
     fn instantiate(
@@ -211,7 +244,7 @@ impl ComponentRuntime {
 
         let store_state = StoreState::new()?;
         let mut store = Store::new(engine, store_state);
-        let bindings = component::CanvasApp::instantiate(&mut store, component, &mut linker)
+        let bindings = component::CanvasApp::instantiate(&mut store, component, &linker)
             .context("failed to instantiate component")?;
         Ok((store, bindings))
     }

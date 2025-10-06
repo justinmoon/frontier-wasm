@@ -3,3 +3,5 @@ target/
 **/target/
 *.wasm
 .DS_Store
+!assets/counter-component.wasm
+.direnv/
